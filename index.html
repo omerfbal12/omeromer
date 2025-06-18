@@ -693,13 +693,13 @@
                         How can I support you today?
                     </p>
                     <div class="suggestion-buttons">
-                        <button class="suggestion-button" onclick="sendSuggestion('I've been feeling anxious lately and need someone to talk to')">
+                        <button class="suggestion-button" onclick="sendSuggestion('I have been feeling anxious lately and need someone to talk to')">
                             "I've been feeling anxious lately and need someone to talk to"
                         </button>
                         <button class="suggestion-button" onclick="sendSuggestion('Can you help me work through some relationship issues?')">
                             "Can you help me work through some relationship issues?"
                         </button>
-                        <button class="suggestion-button" onclick="sendSuggestion('I'm struggling with stress from work and need coping strategies')">
+                        <button class="suggestion-button" onclick="sendSuggestion('I am struggling with stress from work and need coping strategies')">
                             "I'm struggling with stress from work and need coping strategies"
                         </button>
                         <button class="suggestion-button" onclick="sendSuggestion('I just need someone to listen without judgment')">
@@ -751,6 +751,10 @@
         let conversations = [];
         let messages = [];
         let isTyping = false;
+
+        // API Configuration
+        const GEMINI_API_KEY = 'AIzaSyDZl-sRhYpZZNan-c4W90j-uMlSW0XaBWM'; // Replace with your new key after regenerating
+        const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
 
         // Sample conversations for demo
         const sampleConversations = [
@@ -968,25 +972,71 @@
             scrollToBottom();
         }
 
-        // Generate AI response
-        function generateAIResponse(userMessage) {
-            const lowerMessage = userMessage.toLowerCase();
-            let responses;
-            
-            if (lowerMessage.includes('anxious') || lowerMessage.includes('anxiety') || lowerMessage.includes('worried')) {
-                responses = aiResponses.anxiety;
-            } else if (lowerMessage.includes('work') || lowerMessage.includes('job') || lowerMessage.includes('stress')) {
-                responses = aiResponses.work;
-            } else if (lowerMessage.includes('relationship') || lowerMessage.includes('partner') || lowerMessage.includes('friend')) {
-                responses = aiResponses.relationships;
-            } else if (lowerMessage.includes('hello') || lowerMessage.includes('hi') || lowerMessage.includes('hey')) {
-                responses = aiResponses.greeting;
-            } else {
-                responses = aiResponses.general;
+        // Generate AI response using Gemini API
+        async function generateAIResponse(userMessage) {
+            try {
+                // Build conversation context
+                let conversationHistory = '';
+                if (messages.length > 1) {
+                    const recentMessages = messages.slice(-6); // Last 6 messages for context
+                    conversationHistory = recentMessages.map(msg => 
+                        `${msg.type === 'user' ? 'Client' : 'Serena'}: ${msg.content}`
+                    ).join('\n') + '\n';
+                }
+
+                // Create conversation context for therapy
+                const therapyPrompt = `You are Serena, a compassionate and professional AI therapist. You provide empathetic, thoughtful, and supportive responses to help people with their mental health and emotional wellbeing. 
+
+Key guidelines:
+- Always maintain a warm, non-judgmental, and supportive tone
+- Ask thoughtful follow-up questions to encourage deeper reflection
+- Provide practical coping strategies when appropriate
+- Validate the person's feelings and experiences
+- Keep responses conversational and not overly clinical
+- Remember this is a safe space for emotional expression
+- If someone mentions serious mental health crises, gently suggest professional help
+- Reference previous parts of the conversation when relevant
+
+${conversationHistory ? 'Previous conversation:\n' + conversationHistory : ''}
+Client: ${userMessage}
+
+Please respond as Serena would:`;
+
+                const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [{
+                                text: therapyPrompt
+                            }]
+                        }],
+                        generationConfig: {
+                            temperature: 0.7,
+                            topK: 40,
+                            topP: 0.95,
+                            maxOutputTokens: 1024,
+                        }
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API request failed: ${response.status}`);
+                }
+
+                const data = await response.json();
+                const aiResponse = data.candidates[0].content.parts[0].text;
+                
+                addMessage('ai', aiResponse);
+                
+            } catch (error) {
+                console.error('Error generating AI response:', error);
+                // Fallback to a generic supportive message
+                const fallbackResponse = "I'm here to listen and support you. Sometimes there might be technical difficulties, but please know that your feelings are valid and important. Would you like to try sharing again, or is there another way I can help you right now?";
+                addMessage('ai', fallbackResponse);
             }
-            
-            const response = responses[Math.floor(Math.random() * responses.length)];
-            addMessage('ai', response);
         }
 
         // Show typing indicator
